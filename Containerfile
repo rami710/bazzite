@@ -891,41 +891,17 @@ RUN --mount=type=cache,dst=/var/cache \
     /ctx/image-info && \
     /ctx/build-initramfs && \
     /ctx/finalize
+    # --- AIR OS: ARCHITECTURE ULTRA-LÉGÈRE ---
 
-RUN --mount=type=tmpfs,target=/run --network=none bootc container lint
-# --- ARCHITECTURE AIR OS - INSERTION ---
-
-# 1. Purge Système (Empreinte Minimale)
+# Suppression radicale des services inutiles
 RUN rpm-ostree override remove \
-    hp-health hp-wmi avahi-daemon
+    hp-health hp-wmi avahi-daemon thermald \
+    PackageKit PackageKit-command-not-found \
+    gnome-software firefox
 
-# 2. Pipeline Natif (Compilation LLVM)
-RUN rpm-ostree install clang llvm lld inotify-tools
+# Installation des dépendances pour AirAI
+RUN rpm-ostree install python3-pip python3-tkinter speech-recognition
 
-# 3. Cœur IA (Qwen2.5-Coder 8B - Intégration Native)
-RUN mkdir -p /air/.ai_core && \
-    curl -L -o /air/.ai_core/model.gguf https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf
-
-# 4. Arborescence AirOS
-RUN mkdir -p /air/bin /air/agents /air/.runtime /air/.pipe
-
-# 5. Configuration Environnement
-RUN ln -s /usr/bin/clang /usr/local/bin/air-compile
-# --- ARCHITECTURE AIR OS ---
-
-# 1. Purge Système (Empreinte Minimale)
-RUN rpm-ostree override remove \
-    hp-health hp-wmi avahi-daemon
-
-# 2. Pipeline Natif (Compilation LLVM)
-RUN rpm-ostree install clang llvm lld inotify-tools
-
-# 3. Cœur IA (Qwen2.5-Coder 8B - Intégration Native)
-RUN mkdir -p /air/.ai_core && \
-    curl -L -o /air/.ai_core/model.gguf https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf
-
-# 4. Arborescence AirOS
-RUN mkdir -p /air/bin /air/agents /air/.runtime /air/.pipe
-
-# 5. Configuration Environnement
-RUN ln -s /usr/bin/clang /usr/local/bin/air-compile
+# Préparation du "Purge Daemon"
+RUN mkdir -p /usr/bin/air_scripts
+COPY purge_daemon.sh /usr/bin/air_scripts/
