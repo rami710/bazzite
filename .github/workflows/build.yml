@@ -1,11 +1,5 @@
-name: Build Bazzite
+name: Build Bazzite ISO
 on:
-  schedule:
-    - cron: "40 4 * * 1"
-  pull_request:
-    branches: [ testing, unstable ]
-  push:
-    branches: [ testing, unstable ]
   workflow_dispatch:
 
 permissions:
@@ -13,35 +7,29 @@ permissions:
   packages: write
   id-token: write
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
-  push-ghcr:
-    name: Make
+  build:
+    name: Build ISO
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        image: [bazzite, bazzite-gnome]
-        include:
-          - fedora_version: 44
-            kernel_flavor: ogc
-            kernel_version: 7.0.9-ogc3.2.fc44.x86_64
-            base_image_flavor: main
-            arch: x86_64
+        # On limite à 'bazzite' seul pour éviter la saturation mémoire (Erreur 125)
+        image: [bazzite] 
+    
     steps:
       - uses: actions/checkout@v4
-      - name: Build Image
-        id: build_image
-        run: |
-          echo "Construction simplifiée uniquement..."
-          # Ici le build se fera sans les étapes de signature qui bloquent
-      
-      - name: Login to GitHub Container Registry
-        run: echo ${{ secrets.GITHUB_TOKEN }} | sudo podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Push to GHCR
+      - name: Build Image and ISO
         run: |
-          echo "Image construite et prête à être poussée."
+          # Appel du script officiel de construction de Bazzite
+          # Ce script génère l'image conteneur ET l'ISO
+          ./build.sh ${{ matrix.image }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bazzite-iso-${{ matrix.image }}
+          # On cherche tous les fichiers .iso générés dans le dossier
+          path: "*.iso"
+          if-no-files-found: error
