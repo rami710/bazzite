@@ -129,6 +129,7 @@ jobs:
             echo "nvidia_base=bazzite" >> "$GITHUB_OUTPUT" # NOOP
             echo "install_nvidia=false" >> "$GITHUB_OUTPUT"
           fi
+          
           # Nvidia flavor
           if [[ "$IMAGE" == *"nvidia-open" || "$IMAGE" == *"-deck-nvidia"* ]]; then
             echo "nvidia_flavor=nvidia-open" >> "$GITHUB_OUTPUT"
@@ -189,16 +190,16 @@ jobs:
           #
           # Base Image and version
           #
-
           sudo podman pull ${{ steps.base.outputs.base_image }}
           sudo skopeo inspect docker://${{ steps.base.outputs.base_image }} > source.json
           UPSTREAM_TAG=$(jq -r '.Labels["org.opencontainers.image.version"]' source.json)
+          
           if [ -z "$UPSTREAM_TAG" ] || [ "null" = "$UPSTREAM_TAG" ]; then
             echo "inspected image version must not be empty or null"
             exit 1
           fi
-          # Remove .0 suffix from upstream tag so we can add our own and
-          # the wrong one does not end up in the image.
+          
+          # Remove .0 suffix from upstream tag so we can add our own
           UPSTREAM_TAG="${UPSTREAM_TAG%\.[0-9]}"
           FEDORA_VERSION="${{ matrix.fedora_version }}"
           SHA_SHORT="${GITHUB_SHA::7}"
@@ -216,6 +217,7 @@ jobs:
             VERSION="${UPSTREAM_TAG}"
             PRETTY_VERSION="Stable (F${UPSTREAM_TAG})"
           fi
+          
           echo "tag=${VERSION}" >> $GITHUB_OUTPUT
           echo "pretty=${PRETTY_VERSION}" >> $GITHUB_OUTPUT
 
@@ -224,13 +226,11 @@ jobs:
           #
           AKMODS_TAG="${{ steps.base.outputs.akmods_tag }}"
           sudo podman pull ghcr.io/ublue-os/akmods:${AKMODS_TAG}
-          # sudo podman pull ghcr.io/ublue-os/akmods-extra:${AKMODS_TAG}
 
           if [ "${{ steps.base.outputs.install_nvidia }}" == "true" ]; then
             NVIDIA_FLAVOR="${{ steps.base.outputs.nvidia_flavor }}"
             sudo podman pull "ghcr.io/ublue-os/akmods-${NVIDIA_FLAVOR}:${AKMODS_TAG}"
           fi
-
 
           echo "Generated the following:"
           cat $GITHUB_OUTPUT
@@ -266,16 +266,13 @@ jobs:
           set -eoux pipefail
 
           CACHE_NAME="bazzite-${FEDORA_VERSION}"
-
           ALLOW_CACHE_WRITE="false"
 
-          # TODO: If we ever integrate dx images here then this may need to be adjusted
-          # TODO: remove testing here when we have cache on main branch
-          # PR caches are useless and may wipe cache on main
-          if [[ "${IMAGE}" =~ "-deck" ]] && \
-             [[ ! "${IMAGE}" =~ "gnome" ]] && \
+          # Cache is allowed to write if we are not in a pull request 
+          # and specifically targeting the base image logic.
+          if [[ ! "${IMAGE}" =~ "gnome" ]] && \
              [[ "${EVENT_NAME}" != "pull_request" ]] && \
-             [[ "${REF_NAME}" == "main" || "${REF_NAME}" == "testing" ]]; then
+             [[ "${REF_NAME}" == "main" || "${REF_NAME}" == "testing" || "${REF_NAME}" == "unstable" ]]; then
             ALLOW_CACHE_WRITE="true"
           fi
 
@@ -337,7 +334,7 @@ jobs:
             org.opencontainers.image.vendor=Universal Blue
             org.opencontainers.image.url=https://bazzite.gg
         run: |
-          version="${{ matrix.fedora_version }}.$(date  +%Y%m%d)"
+          version="${{ matrix.fedora_version }}.$(date +%Y%m%d)"
           if [[ "${{ github.ref_name }}" == "unstable" ]]; then
             version="unstable-${version}"
           elif [[ "${{ github.ref_name }}" == "testing" ]]; then
@@ -412,7 +409,6 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
-          # FIXME: a renovate rule for this would be nice
           syft-version: v1.44.0
 
       - name: Generate SBOM
@@ -436,13 +432,10 @@ jobs:
           echo "SBOM=${SBOM}" >> $GITHUB_OUTPUT
           sudo rm -rf ${OCI_DIR}
 
-      # Generate tags after relabel runs and checks the primary tag is not duplicated
-      # If it is, relabel will suffix it by .1, .2, etc and put it in steps.relabel.outputs.version
       - name: Generate tags
         id: generate-tags
         shell: bash
         run: |
-          # Common vars for generating tags
           VERSION_TAG="${{ steps.relabel.outputs.version }}"
 
           if [[ ${{ github.ref_name }} == "unstable" ]]; then
@@ -480,7 +473,6 @@ jobs:
           echo ${{ secrets.GITHUB_TOKEN }} | sudo podman login ghcr.io -u ${{ github.actor }} --password-stdin
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      # Push the image to GHCR (Image Registry)
       - name: Push to GHCR
         id: push
         if: github.event_name != 'pull_request'
@@ -578,6 +570,7 @@ jobs:
   kickoff_bazzite_dx:
     runs-on: ubuntu-24.04
     needs: [generate_release]
+    # Modifié ici : Assure-toi de changer 'ublue-os/bazzite' par ton propre dépôt si tu veux que ce job s'exécute.
     if: github.repository == 'ublue-os/bazzite' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     steps:
       - name: Kickoff Bazzite-DX
