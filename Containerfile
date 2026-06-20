@@ -905,3 +905,15 @@ RUN rpm-ostree install python3-pip python3-tkinter speech-recognition
 # Préparation du "Purge Daemon"
 RUN mkdir -p /usr/bin/air_scripts
 COPY purge_daemon.sh /usr/bin/air_scripts/
+# --- RENOMMAGE TOTAL EN AirOS ---
+
+# 1. Mise à jour de l'identité principale
+RUN echo 'NAME="AirOS"' > /usr/lib/os-release && \
+    echo 'PRETTY_NAME="AirOS (Build Custom)"' >> /usr/lib/os-release && \
+    echo 'ID="air-os"' >> /usr/lib/os-release && \
+    echo 'ID_LIKE="fedora"' >> /usr/lib/os-release && \
+    echo 'VERSION="1.0"' >> /usr/lib/os-release
+
+# 2. Remplacement des fichiers d'identité secondaires pour forcer l'affichage
+RUN ln -sf /usr/lib/os-release /etc/os-release
+RUN echo "AirOS" > /etc/hostname
